@@ -40,13 +40,8 @@ export interface AudioTrackProps extends JSX.AudioHTMLAttributes<HTMLAudioElemen
  * @see `ParticipantTile` component
  * @public
  */
-export function AudioTrack({
-  trackRef,
-  onSubscriptionStatusChanged,
-  volume,
-  ...props
-}: AudioTrackProps) {
-  const trackReference = useEnsureTrackRef(trackRef)
+export function AudioTrack(props: AudioTrackProps) {
+  const trackReference = useEnsureTrackRef(props.trackRef)
 
   let mediaEl: HTMLAudioElement | undefined
 
@@ -59,16 +54,16 @@ export function AudioTrack({
   )
 
   createEffect(() => {
-    onSubscriptionStatusChanged?.(!!isSubscribed())
+    props.onSubscriptionStatusChanged?.(!!isSubscribed())
   })
 
   createEffect(() => {
     const t = track()
-    if (t === undefined || volume === undefined) {
+    if (t === undefined || props.volume === undefined) {
       return
     }
     if (t instanceof RemoteAudioTrack) {
-      t.setVolume(volume)
+      t.setVolume(props.volume)
     } else {
       log.warn('Volume can only be set on remote audio tracks.')
     }
