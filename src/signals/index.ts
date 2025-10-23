@@ -11,9 +11,6 @@
 // TODO: useLiveKitRoom
 // TODO: useLocalParticipant
 // TODO: useLocalParticipantPermissions
-// TODO: useMediaDevices
-// TODO: useMediaDeviceSelect
-// TODO: useMediaTrackBySourceOrName
 // TODO: usePagination
 // TODO: usePaginationTile
 // TODO: usePaginationTracks
@@ -49,6 +46,12 @@ export type { UseIsMutedOptions } from './useIsMuted'
 export { useIsMuted } from './useIsMuted'
 
 export { useIsSpeaking } from './useIsSpeaking'
+
+export { useMediaDevices } from './useMediaDevices';
+
+export { useMediaDeviceSelect } from './useMediaDeviceSelect';
+
+export { useMediaTrackBySourceOrName } from './useMediaTrackBySourceOrName';
 
 export type { UseTracksHookReturnType, UseTracksOptions } from './useTracks'
 export { useTracks } from './useTracks'

@@ -1,3 +1,6 @@
+// @livekit/components-react@2.0.4
+// Apache-2.0
+
 import { RemoteTrackPublication } from 'livekit-client'
 import { useMediaTrackBySourceOrName } from '../../signals/useMediaTrackBySourceOrName'
 import type { ParticipantClickEvent, TrackReference } from '@livekit/components-core'
