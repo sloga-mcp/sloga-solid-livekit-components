@@ -4,7 +4,7 @@
 import type { TrackIdentifier } from '@livekit/components-core'
 import { isTrackReference } from '@livekit/components-core'
 import { setupMediaTrack, log, isLocal, getTrackByIdentifier } from '@livekit/components-core'
-import { createEffect, createMemo, createSignal } from 'solid-js'
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
 import type { JSX } from 'solid-js/jsx-runtime'
 
 /** @public */
@@ -27,7 +27,21 @@ export function useMediaTrackBySourceOrName(
 
   const [track, setTrack] = createSignal(publication()?.track)
   const [orientation, setOrientation] = createSignal<'landscape' | 'portrait'>('landscape')
-  let previousElement: HTMLMediaElement | undefined
+  // Tracked as a PAIR so the effect detaches the track it actually attached.
+  // The previous shape detached the *new* track from the *old* element (a
+  // no-op, since that track was never on it) and skipped detaching entirely
+  // when the track went away, leaving dead tracks in livekit's
+  // `attachedElements` for the lifetime of the room.
+  let attachedTrack: ReturnType<typeof track>
+  let attachedElement: HTMLMediaElement | undefined
+
+  const detachCurrent = () => {
+    if (attachedTrack && attachedElement) {
+      attachedTrack.detach(attachedElement)
+    }
+    attachedTrack = undefined
+    attachedElement = undefined
+  }
 
   const mediaTrack = createMemo(() => {
     // { className, trackObserver }
@@ -47,28 +61,28 @@ export function useMediaTrackBySourceOrName(
       setTrack(publication?.track)
     })
 
-    return () => subscription.unsubscribe()
+    onCleanup(() => subscription.unsubscribe())
   })
 
   createEffect(() => {
     const t = track()
     const el = options.element?.()
-    if (t) {
-      if (previousElement) {
-        t.detach(previousElement)
-      }
-      if (el && !(isLocal(observerOptions.participant) && t.kind === 'audio')) {
-        console.info('attaching!')
-        t.attach(el)
-      }
-    }
-    previousElement = el
-    return () => {
-      if (previousElement) {
-        t?.detach(previousElement)
-      }
-    }
+
+    // Re-runs whenever the publication's track changes — including to
+    // `undefined` on unpublish, which is exactly when the old track has to come
+    // off the element.
+    detachCurrent()
+
+    if (!t || !el) return
+    // Never attach local audio: it would play the user's own mic back at them.
+    if (isLocal(observerOptions.participant) && t.kind === 'audio') return
+
+    t.attach(el)
+    attachedTrack = t
+    attachedElement = el
   })
+
+  onCleanup(detachCurrent)
 
   createEffect(() => {
     // Set the orientation of the video track.

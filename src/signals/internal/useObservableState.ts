@@ -3,7 +3,7 @@
 
 // @ts-ignore
 import type { Observable } from 'rxjs'
-import { createEffect, createSignal } from 'solid-js'
+import { createEffect, createSignal, onCleanup } from 'solid-js'
 
 /**
  * @internal
@@ -14,7 +14,7 @@ export function useObservableState<T>(observable: Observable<T> | undefined, sta
     // observable state doesn't run in SSR
     if (typeof window === 'undefined' || !observable) return
     const subscription = observable.subscribe(setState)
-    return () => subscription.unsubscribe()
-  }, [observable])
+    onCleanup(() => subscription.unsubscribe())
+  })
   return state
 }

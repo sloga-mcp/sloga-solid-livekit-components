@@ -1,14 +1,10 @@
 // @livekit/components-react@2.0.4
 // Apache-2.0
 
-import {
-  type TrackReferenceOrPlaceholder,
-  getTrackReferenceId,
-  mutedObserver,
-} from '@livekit/components-core'
+import { type TrackReferenceOrPlaceholder, mutedObserver } from '@livekit/components-core'
 import type { Participant, Track } from 'livekit-client'
 import { useEnsureParticipant } from '../context'
-import { Accessor, createEffect, createSignal } from 'solid-js'
+import { Accessor, createEffect, createSignal, onCleanup } from 'solid-js'
 
 /** @public */
 export interface UseIsMutedOptions {
@@ -43,8 +39,8 @@ export function useIsMuted(
 
   createEffect(() => {
     const listener = mutedObserver(ref).subscribe(setIsMuted)
-    return () => listener.unsubscribe()
-  }, [getTrackReferenceId(ref)])
+    onCleanup(() => listener.unsubscribe())
+  })
 
   return isMuted
 }

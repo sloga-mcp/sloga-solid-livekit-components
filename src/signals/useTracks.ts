@@ -1,7 +1,7 @@
 // @livekit/components-react@2.0.4
 // Apache-2.0
 
-import { Accessor, createEffect, createMemo, createSignal } from 'solid-js'
+import { Accessor, createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
 
 import {
   SourcesArray,
@@ -77,8 +77,8 @@ export function useTracks<T extends SourcesArray = Track.Source[]>(
       setParticipants(participants)
     })
 
-    return () => subscription.unsubscribe()
-  }, [room(), JSON.stringify(options.updateOnlyOn), JSON.stringify(sources)])
+    onCleanup(() => subscription.unsubscribe())
+  })
 
   const maybeTrackReferences = createMemo(() => {
     if (isSourcesWithOptions(sources)) {
