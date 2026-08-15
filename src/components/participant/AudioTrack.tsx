@@ -5,10 +5,9 @@ import { useMediaTrackBySourceOrName } from '../../signals/useMediaTrackBySource
 import type { TrackReference } from '@livekit/components-core'
 import { log } from '@livekit/components-core'
 import { RemoteAudioTrack, RemoteTrackPublication } from 'livekit-client'
-import { useEnsureTrackRef } from '../../context'
+import { useEnsureTrackRef, useMaybeRoomContext } from '../../context'
 import type { JSX } from 'solid-js/jsx-runtime'
-import { createEffect, onCleanup } from 'solid-js'
-import { useMediaDeviceSelect } from 'src/signals'
+import { createEffect } from 'solid-js'
 
 /** @public */
 export interface AudioTrackProps extends JSX.AudioHTMLAttributes<HTMLAudioElement> {
@@ -26,7 +25,13 @@ export interface AudioTrackProps extends JSX.AudioHTMLAttributes<HTMLAudioElemen
    */
   muted?: boolean
   /**
-   * Whether to enable gain node when volume > 1
+   * Whether to allow volume above 1 (amplification).
+   *
+   * @remarks
+   * Requires the room to have been created with `webAudioMix`, which gives
+   * livekit a shared AudioContext to hang a GainNode off. Without it there is
+   * no gain stage and volume is clamped to 1, since `HTMLMediaElement.volume`
+   * cannot amplify.
    */
   enableBoosting?: boolean
 }
@@ -65,63 +70,34 @@ export function AudioTrack(props: AudioTrackProps) {
     props.onSubscriptionStatusChanged?.(!!isSubscribed())
   })
 
-  let gainContext: { gainNode: GainNode; audioContext: AudioContext } | undefined
-  const { activeDeviceId } = useMediaDeviceSelect({ kind: 'audiooutput' })
+  const room = useMaybeRoomContext()
 
-  onCleanup(() => {
-    if (gainContext) {
-      gainContext.gainNode.disconnect()
-      gainContext.audioContext.close()
-    }
-  })
+  /**
+   * Whether the room mixes remote audio through livekit's shared AudioContext
+   * (`RoomOptions.webAudioMix`). With a context in play the SDK routes
+   * `setVolume` into a GainNode, so values above 1 amplify; without one the
+   * volume lands on `HTMLMediaElement.volume`, which cannot exceed 1.
+   */
+  const canBoost = () => !!room?.()?.options.webAudioMix
 
+  // Volume is delegated wholesale to the SDK. It owns the Web Audio graph:
+  // it rebuilds the source node on every `attach()`, which is what makes a
+  // boosted participant survive a reconnect — livekit swaps the track in
+  // place under the same trackSid, so the component is never remounted and
+  // anything cached here would stay bound to the dead MediaStreamTrack.
   createEffect(() => {
     const t = track()
     if (t === undefined || props.volume === undefined) {
       return
     }
-    if (t instanceof RemoteAudioTrack) {
-      if (!props.enableBoosting || props.volume <= 1) {
-        t.setVolume(props.volume)
-
-        if (gainContext) {
-          gainContext.gainNode.disconnect()
-          gainContext.audioContext.close()
-          gainContext = undefined
-        }
-      } else {
-        if (gainContext) {
-          gainContext.gainNode.gain.value = props.volume
-        } else {
-          t.setVolume(0)
-
-          const audioContext = new AudioContext()
-
-          if ('setSinkId' in AudioContext.prototype) {
-            ;(audioContext as never as { setSinkId: (sinkId: string) => Promise<void> }).setSinkId(
-              activeDeviceId(),
-            )
-          } else {
-            console.error(`Browser does not support AudioContext#setSyncId!`)
-          }
-
-          const gainNode = audioContext.createGain()
-
-          const source = audioContext.createMediaStreamSource(new MediaStream([t.mediaStreamTrack]))
-
-          gainNode.gain.value = props.volume
-          gainNode.connect(audioContext.destination)
-          source.connect(gainNode)
-
-          gainContext = {
-            audioContext,
-            gainNode,
-          }
-        }
-      }
-    } else {
+    if (!(t instanceof RemoteAudioTrack)) {
       log.warn('Volume can only be set on remote audio tracks.')
+      return
     }
+    // Clamp with no gain stage available: assigning above 1 to a media
+    // element throws in some browsers and silently clamps in the rest, so
+    // make the cap explicit rather than browser-dependent.
+    t.setVolume(props.enableBoosting && canBoost() ? props.volume : Math.min(props.volume, 1))
   })
 
   createEffect(() => {
